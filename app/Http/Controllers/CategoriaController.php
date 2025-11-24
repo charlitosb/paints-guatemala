@@ -12,7 +12,10 @@ class CategoriaController extends Controller
      */
     public function index()
     {
-        $categorias = Categoria::withCount('productos')->orderBy('nombre')->paginate(15);
+        $categorias = Categoria::withCount('productos')
+            ->orderBy('nombre')
+            ->paginate(15);
+        
         return view('categorias.index', compact('categorias'));
     }
 
@@ -30,23 +33,26 @@ class CategoriaController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'nombre' => 'required|max:100|unique:categorias,nombre',
-            'descripcion' => 'nullable',
+            'nombre' => 'required|string|max:100|unique:categorias,nombre',
+            'descripcion' => 'nullable|string'
         ]);
 
         Categoria::create($validated);
 
         return redirect()->route('categorias.index')
-            ->with('success', 'Categoría creada exitosamente');
+            ->with('success', 'Categoría creada exitosamente.');
     }
 
     /**
-     * Mostrar una categoría específica
+     * Mostrar detalle de la categoría
      */
-    public function show(Categoria $categoria)
+    public function show($id)
     {
+        $categoria = Categoria::withCount('productos')->findOrFail($id);
+        
+        // Cargar productos de la categoría
         $categoria->load(['productos' => function($query) {
-            $query->where('activo', true)->orderBy('nombre');
+            $query->latest()->limit(20);
         }]);
         
         return view('categorias.show', compact('categoria'));
@@ -55,40 +61,50 @@ class CategoriaController extends Controller
     /**
      * Mostrar formulario de edición
      */
-    public function edit(Categoria $categoria)
+    public function edit($id)
     {
+        $categoria = Categoria::findOrFail($id);
         return view('categorias.edit', compact('categoria'));
     }
 
     /**
      * Actualizar categoría
      */
-    public function update(Request $request, Categoria $categoria)
+    public function update(Request $request, $id)
     {
+        $categoria = Categoria::findOrFail($id);
+        
         $validated = $request->validate([
-            'nombre' => 'required|max:100|unique:categorias,nombre,' . $categoria->id,
-            'descripcion' => 'nullable',
+            'nombre' => 'required|string|max:100|unique:categorias,nombre,' . $id,
+            'descripcion' => 'nullable|string'
         ]);
 
         $categoria->update($validated);
 
         return redirect()->route('categorias.index')
-            ->with('success', 'Categoría actualizada exitosamente');
+            ->with('success', 'Categoría actualizada exitosamente.');
     }
 
     /**
      * Eliminar categoría
      */
-    public function destroy(Categoria $categoria)
+    public function destroy($id)
     {
+        $categoria = Categoria::findOrFail($id);
+        
+        // Verificar si tiene productos asociados
         if ($categoria->productos()->count() > 0) {
             return redirect()->route('categorias.index')
-                ->with('error', 'No se puede eliminar la categoría porque tiene productos asociados');
+                ->with('error', 'No se puede eliminar la categoría porque tiene productos asociados.');
         }
-
-        $categoria->delete();
         
-        return redirect()->route('categorias.index')
-            ->with('success', 'Categoría eliminada exitosamente');
+        try {
+            $categoria->delete();
+            return redirect()->route('categorias.index')
+                ->with('success', 'Categoría eliminada exitosamente.');
+        } catch (\Exception $e) {
+            return redirect()->route('categorias.index')
+                ->with('error', 'Error al eliminar la categoría.');
+        }
     }
 }

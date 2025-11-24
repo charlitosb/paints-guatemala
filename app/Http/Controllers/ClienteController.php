@@ -30,31 +30,32 @@ class ClienteController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'nombre' => 'required|max:150',
-            'email' => 'nullable|email|max:100|unique:clientes,email',
-            'telefono' => 'nullable|max:20',
-            'direccion' => 'nullable|max:255',
-            'nit' => 'nullable|max:20',
-            'dpi' => 'nullable|max:20',
-            'recibir_promociones' => 'boolean',
+            'nombre' => 'required|string|max:255',
+            'nit' => 'nullable|string|max:20',
+            'telefono' => 'nullable|string|max:20',
+            'email' => 'nullable|email|max:255|unique:clientes,email',
+            'direccion' => 'nullable|string',
+            'activo' => 'boolean'
         ]);
 
-        $validated['fecha_registro'] = now();
-        $validated['activo'] = true;
+        $validated['activo'] = $request->has('activo') ? 1 : 0;
 
         Cliente::create($validated);
 
         return redirect()->route('clientes.index')
-            ->with('success', 'Cliente creado exitosamente');
+            ->with('success', 'Cliente creado exitosamente.');
     }
 
     /**
-     * Mostrar un cliente específico
+     * Mostrar detalle del cliente
      */
-    public function show(Cliente $cliente)
+    public function show($id)
     {
+        $cliente = Cliente::findOrFail($id);
+        
+        // Cargar facturas solo si existen
         $cliente->load(['facturas' => function($query) {
-            $query->orderByDesc('fecha_emision')->limit(10);
+            $query->with('tienda')->latest()->limit(10);
         }]);
         
         return view('clientes.show', compact('cliente'));
@@ -63,45 +64,50 @@ class ClienteController extends Controller
     /**
      * Mostrar formulario de edición
      */
-    public function edit(Cliente $cliente)
+    public function edit($id)
     {
+        $cliente = Cliente::findOrFail($id);
         return view('clientes.edit', compact('cliente'));
     }
 
     /**
      * Actualizar cliente
      */
-    public function update(Request $request, Cliente $cliente)
+    public function update(Request $request, $id)
     {
+        $cliente = Cliente::findOrFail($id);
+        
         $validated = $request->validate([
-            'nombre' => 'required|max:150',
-            'email' => 'nullable|email|max:100|unique:clientes,email,' . $cliente->id,
-            'telefono' => 'nullable|max:20',
-            'direccion' => 'nullable|max:255',
-            'nit' => 'nullable|max:20',
-            'dpi' => 'nullable|max:20',
-            'recibir_promociones' => 'boolean',
-            'activo' => 'boolean',
+            'nombre' => 'required|string|max:255',
+            'nit' => 'nullable|string|max:20',
+            'telefono' => 'nullable|string|max:20',
+            'email' => 'nullable|email|max:255|unique:clientes,email,' . $id,
+            'direccion' => 'nullable|string',
+            'activo' => 'boolean'
         ]);
+
+        $validated['activo'] = $request->has('activo') ? 1 : 0;
 
         $cliente->update($validated);
 
         return redirect()->route('clientes.index')
-            ->with('success', 'Cliente actualizado exitosamente');
+            ->with('success', 'Cliente actualizado exitosamente.');
     }
 
     /**
      * Eliminar cliente
      */
-    public function destroy(Cliente $cliente)
+    public function destroy($id)
     {
+        $cliente = Cliente::findOrFail($id);
+        
         try {
             $cliente->delete();
             return redirect()->route('clientes.index')
-                ->with('success', 'Cliente eliminado exitosamente');
+                ->with('success', 'Cliente eliminado exitosamente.');
         } catch (\Exception $e) {
             return redirect()->route('clientes.index')
-                ->with('error', 'No se puede eliminar el cliente porque tiene facturas asociadas');
+                ->with('error', 'No se puede eliminar el cliente porque tiene registros relacionados.');
         }
     }
 }
