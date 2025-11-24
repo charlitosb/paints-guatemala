@@ -89,24 +89,24 @@
                 <hr>
 
                 <div class="row">
-    @if($proveedor->created_at)
-    <div class="col-md-6">
-        <p class="small text-muted mb-0">
-            <i class="bi bi-calendar-plus"></i> 
-            <strong>Registrado:</strong> {{ $proveedor->created_at->format('d/m/Y H:i') }}
-        </p>
-    </div>
-    @endif
-    
-    @if($proveedor->updated_at)
-    <div class="col-md-6">
-        <p class="small text-muted mb-0">
-            <i class="bi bi-calendar-check"></i> 
-            <strong>Última actualización:</strong> {{ $proveedor->updated_at->format('d/m/Y H:i') }}
-        </p>
-    </div>
-    @endif
-</div>
+                    @if($proveedor->created_at)
+                    <div class="col-md-6">
+                        <p class="small text-muted mb-0">
+                            <i class="bi bi-calendar-plus"></i> 
+                            <strong>Registrado:</strong> {{ $proveedor->created_at->format('d/m/Y H:i') }}
+                        </p>
+                    </div>
+                    @endif
+                    
+                    @if($proveedor->updated_at)
+                    <div class="col-md-6">
+                        <p class="small text-muted mb-0">
+                            <i class="bi bi-calendar-check"></i> 
+                            <strong>Última actualización:</strong> {{ $proveedor->updated_at->format('d/m/Y H:i') }}
+                        </p>
+                    </div>
+                    @endif
+                </div>
             </div>
         </div>
 

@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class IngresoProducto extends Model
 {
-    protected $table = 'ingresos_productos'; // ← Con esta linea se ajusta el nombre del modelo por conflico con el plural de ingresos
+    protected $table = 'ingresos_productos'; // ← Con esta linea se ajusta el nombre del modelo por conflicto con el plural de ingresos
     
     protected $fillable = [
         'numero_ingreso',
