@@ -1,168 +1,70 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Models;
 
-use App\Models\Producto;
-use App\Models\Categoria;
-use Illuminate\Http\Request;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
-class ProductoController extends Controller
+class Producto extends Model
 {
+    use HasFactory;
+
+    protected $fillable = [
+        'codigo',
+        'nombre',
+        'descripcion',
+        'categoria_id',
+        'tipo',
+        'marca',
+        'tamano',
+        'color',
+        'unidad_medida',
+        'duracion_anios',
+        'cobertura_m2',
+        'precio_venta',
+        'descuento',
+        'existencia_minima',
+        'activo'
+    ];
+
+    protected $casts = [
+        'precio_venta' => 'decimal:2',
+        'descuento' => 'decimal:2',
+        'cobertura_m2' => 'decimal:2',
+        'duracion_anios' => 'integer',
+        'existencia_minima' => 'integer',
+        'activo' => 'boolean'
+    ];
+
     /**
-     * Mostrar lista de productos
+     * Relación con categoría
      */
-    public function index()
+    public function categoria()
     {
-        $productos = Producto::with('categoria')
-            ->orderBy('nombre')
-            ->paginate(15);
-        
-        return view('productos.index', compact('productos'));
+        return $this->belongsTo(Categoria::class);
     }
 
     /**
-     * Mostrar formulario de creación
+     * Relación con inventarios
      */
-    public function create()
+    public function inventarios()
     {
-        $categorias = Categoria::activas()->orderBy('nombre')->get();
-        return view('productos.create', compact('categorias'));
+        return $this->hasMany(Inventario::class);
     }
 
     /**
-     * Guardar nuevo producto
+     * Scope para productos activos
      */
-    public function store(Request $request)
+    public function scopeActivos($query)
     {
-        $rules = [
-            'codigo' => 'required|string|max:50|unique:productos,codigo',
-            'nombre' => 'required|string|max:255',
-            'descripcion' => 'nullable|string',
-            'categoria_id' => 'required|exists:categorias,id',
-            'tipo' => 'required|in:accesorio,solvente,pintura,barniz',
-            'marca' => 'nullable|string|max:100',
-            'precio_venta' => 'required|numeric|min:0',
-            'descuento' => 'nullable|numeric|min:0|max:100',
-            'existencia_minima' => 'required|integer|min:0',
-            'activo' => 'boolean'
-        ];
-
-        // Campos específicos según tipo
-        if (in_array($request->tipo, ['pintura', 'barniz'])) {
-            $rules['duracion_anios'] = 'nullable|integer|min:0';
-            $rules['cobertura_m2'] = 'nullable|numeric|min:0';
-        }
-
-        if ($request->tipo === 'pintura') {
-            $rules['color'] = 'nullable|string|max:50';
-        }
-
-        if (in_array($request->tipo, ['solvente', 'pintura', 'barniz'])) {
-            $rules['unidad_medida'] = 'nullable|string|max:50';
-        }
-
-        if ($request->tipo === 'accesorio') {
-            $rules['tamano'] = 'nullable|string|max:50';
-        }
-
-        $validated = $request->validate($rules);
-        $validated['activo'] = $request->has('activo') ? 1 : 0;
-
-        Producto::create($validated);
-
-        return redirect()->route('productos.index')
-            ->with('success', 'Producto creado exitosamente.');
+        return $query->where('activo', true);
     }
 
     /**
-     * Mostrar detalle del producto
+     * Scope por tipo
      */
-    public function show($id)
+    public function scopeTipo($query, $tipo)
     {
-        $producto = Producto::with(['categoria', 'inventarios.tienda'])
-            ->findOrFail($id);
-        
-        return view('productos.show', compact('producto'));
-    }
-
-    /**
-     * Mostrar formulario de edición
-     */
-    public function edit($id)
-    {
-        $producto = Producto::with('categoria')->findOrFail($id);
-        $categorias = Categoria::activas()->orderBy('nombre')->get();
-        
-        return view('productos.edit', compact('producto', 'categorias'));
-    }
-
-    /**
-     * Actualizar producto
-     */
-    public function update(Request $request, $id)
-    {
-        $producto = Producto::findOrFail($id);
-        
-        $rules = [
-            'codigo' => 'required|string|max:50|unique:productos,codigo,' . $id,
-            'nombre' => 'required|string|max:255',
-            'descripcion' => 'nullable|string',
-            'categoria_id' => 'required|exists:categorias,id',
-            'tipo' => 'required|in:accesorio,solvente,pintura,barniz',
-            'marca' => 'nullable|string|max:100',
-            'precio_venta' => 'required|numeric|min:0',
-            'descuento' => 'nullable|numeric|min:0|max:100',
-            'existencia_minima' => 'required|integer|min:0',
-            'activo' => 'boolean'
-        ];
-
-        // Campos específicos según tipo
-        if (in_array($request->tipo, ['pintura', 'barniz'])) {
-            $rules['duracion_anios'] = 'nullable|integer|min:0';
-            $rules['cobertura_m2'] = 'nullable|numeric|min:0';
-        }
-
-        if ($request->tipo === 'pintura') {
-            $rules['color'] = 'nullable|string|max:50';
-        }
-
-        if (in_array($request->tipo, ['solvente', 'pintura', 'barniz'])) {
-            $rules['unidad_medida'] = 'nullable|string|max:50';
-        }
-
-        if ($request->tipo === 'accesorio') {
-            $rules['tamano'] = 'nullable|string|max:50';
-        }
-
-        $validated = $request->validate($rules);
-        $validated['activo'] = $request->has('activo') ? 1 : 0;
-
-        $producto->update($validated);
-
-        return redirect()->route('productos.index')
-            ->with('success', 'Producto actualizado exitosamente.');
-    }
-
-    /**
-     * Eliminar producto
-     */
-    public function destroy($id)
-    {
-        $producto = Producto::findOrFail($id);
-        
-        // Verificar si tiene inventario
-        if ($producto->inventarios()->sum('existencia') > 0) {
-            return redirect()->route('productos.index')
-                ->with('error', 'No se puede eliminar el producto porque tiene existencias en inventario.');
-        }
-        
-        try {
-            $producto->delete();
-            return redirect()->route('productos.index')
-                ->with('success', 'Producto eliminado exitosamente.');
-        } catch (\Exception $e) {
-            return redirect()->route('productos.index')
-                ->with('error', 'Error al eliminar el producto.');
-        }
+        return $query->where('tipo', $tipo);
     }
 }
