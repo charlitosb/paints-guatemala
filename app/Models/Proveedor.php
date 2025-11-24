@@ -2,36 +2,32 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Proveedor extends Model
 {
-    use HasFactory;
-
     protected $table = 'proveedores';
-
+    
     protected $fillable = [
         'nombre',
         'empresa',
         'telefono',
         'email',
         'direccion',
-        'nit',
-        'activo',
+        'activo'
     ];
 
     protected $casts = [
-        'activo' => 'boolean',
+        'activo' => 'boolean'
     ];
 
-    // Relaciones
-    public function ingresosProductos()
+    // Relación con ingresos de productos
+    public function ingresos()
     {
-        return $this->hasMany(IngresoProducto::class);
+        return $this->hasMany(\App\Models\IngresoProducto::class, 'proveedor_id');
     }
 
-    // Scopes
+    // Scope para proveedores activos
     public function scopeActivos($query)
     {
         return $query->where('activo', true);
