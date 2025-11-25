@@ -9,6 +9,8 @@ class DetalleIngreso extends Model
 {
     use HasFactory;
 
+    protected $table = 'detalle_ingresos';
+
     protected $fillable = [
         'ingreso_id',
         'producto_id',
@@ -23,14 +25,47 @@ class DetalleIngreso extends Model
         'subtotal' => 'decimal:2',
     ];
 
-    // Relaciones
+    // ============================================
+    // RELACIONES
+    // ============================================
+
     public function ingreso()
     {
-        return $this->belongsTo(IngresoProducto::class, 'ingreso_id');
+        return $this->belongsTo(Ingreso::class);
     }
 
     public function producto()
     {
         return $this->belongsTo(Producto::class);
+    }
+
+    // ============================================
+    // MÉTODOS
+    // ============================================
+
+    /**
+     * Calcular el subtotal automáticamente
+     */
+    public function calcularSubtotal()
+    {
+        return $this->cantidad * $this->precio_compra;
+    }
+
+    /**
+     * Boot method para calcular subtotal automáticamente
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($detalle) {
+            if (!$detalle->subtotal) {
+                $detalle->subtotal = $detalle->calcularSubtotal();
+            }
+        });
+
+        static::updating(function ($detalle) {
+            $detalle->subtotal = $detalle->calcularSubtotal();
+        });
     }
 }
