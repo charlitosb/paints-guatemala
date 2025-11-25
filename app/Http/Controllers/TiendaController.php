@@ -8,11 +8,12 @@ use Illuminate\Http\Request;
 class TiendaController extends Controller
 {
     /**
-     * Mostrar lista de tiendas
+     * Mostrar listado de tiendas
      */
     public function index()
     {
-        $tiendas = Tienda::withCount(['users', 'inventarios'])
+        // Removido withCount(['users']) porque users no tiene tienda_id
+        $tiendas = Tienda::withCount(['inventarios'])
             ->orderBy('nombre')
             ->paginate(15);
         
@@ -32,106 +33,130 @@ class TiendaController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'nombre' => 'required|string|max:255',
-            'direccion' => 'required|string',
+        $request->validate([
+            'nombre' => 'required|string|max:255|unique:tiendas',
+            'direccion' => 'required|string|max:500',
             'telefono' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
-            'activa' => 'boolean'
+            'latitud' => 'nullable|numeric|between:-90,90',
+            'longitud' => 'nullable|numeric|between:-180,180',
+        ], [
+            'nombre.required' => 'El nombre de la tienda es obligatorio',
+            'nombre.unique' => 'Ya existe una tienda con este nombre',
+            'direccion.required' => 'La dirección es obligatoria',
+            'latitud.between' => 'La latitud debe estar entre -90 y 90',
+            'longitud.between' => 'La longitud debe estar entre -180 y 180',
         ]);
 
-        $validated['activa'] = $request->has('activa') ? 1 : 0;
-
-        Tienda::create($validated);
+        Tienda::create([
+            'nombre' => $request->nombre,
+            'direccion' => $request->direccion,
+            'telefono' => $request->telefono,
+            'email' => $request->email,
+            'latitud' => $request->latitud,
+            'longitud' => $request->longitud,
+            'activo' => true,
+        ]);
 
         return redirect()->route('tiendas.index')
-            ->with('success', 'Tienda creada exitosamente.');
+            ->with('success', 'Tienda creada exitosamente');
     }
 
     /**
-     * Mostrar detalle de la tienda
+     * Mostrar detalle de tienda
      */
-    public function show($id)
+    public function show(Tienda $tienda)
     {
-        $tienda = Tienda::withCount(['users', 'inventarios', 'facturas'])
-            ->findOrFail($id);
+        // Cargar inventarios con productos
+        $tienda->load(['inventarios.producto']);
         
-        // Cargar usuarios de la tienda
-        $tienda->load(['users' => function($query) {
-            $query->where('activo', 1)->latest();
-        }]);
-        
-        // Cargar productos con bajo stock en esta tienda
-        // Cambiado: usar whereHas con join para comparar con existencia_minima de productos
-        $tienda->load(['inventarios' => function($query) {
-            $query->with('producto')
-                ->whereHas('producto', function($q) {
-                    $q->whereRaw('inventarios.existencia <= productos.existencia_minima');
-                })
-                ->limit(10);
-        }]);
-        
-        return view('tiendas.show', compact('tienda'));
+        // Estadísticas de la tienda
+        $estadisticas = [
+            'total_productos' => $tienda->inventarios->count(),
+            'productos_bajo_stock' => $tienda->inventarios->filter(function($inv) {
+                return $inv->existencia <= $inv->existencia_minima;
+            })->count(),
+            'productos_sin_stock' => $tienda->inventarios->where('existencia', 0)->count(),
+            'valor_inventario' => $tienda->inventarios->sum(function($inv) {
+                return $inv->existencia * ($inv->producto->precio_venta ?? 0);
+            }),
+        ];
+
+        return view('tiendas.show', compact('tienda', 'estadisticas'));
     }
 
     /**
      * Mostrar formulario de edición
      */
-    public function edit($id)
+    public function edit(Tienda $tienda)
     {
-        $tienda = Tienda::findOrFail($id);
         return view('tiendas.edit', compact('tienda'));
     }
 
     /**
      * Actualizar tienda
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, Tienda $tienda)
     {
-        $tienda = Tienda::findOrFail($id);
-        
-        $validated = $request->validate([
-            'nombre' => 'required|string|max:255',
-            'direccion' => 'required|string',
+        $request->validate([
+            'nombre' => 'required|string|max:255|unique:tiendas,nombre,' . $tienda->id,
+            'direccion' => 'required|string|max:500',
             'telefono' => 'nullable|string|max:20',
             'email' => 'nullable|email|max:255',
-            'activa' => 'boolean'
+            'latitud' => 'nullable|numeric|between:-90,90',
+            'longitud' => 'nullable|numeric|between:-180,180',
+            'activo' => 'boolean',
         ]);
 
-        $validated['activa'] = $request->has('activa') ? 1 : 0;
-
-        $tienda->update($validated);
+        $tienda->update([
+            'nombre' => $request->nombre,
+            'direccion' => $request->direccion,
+            'telefono' => $request->telefono,
+            'email' => $request->email,
+            'latitud' => $request->latitud,
+            'longitud' => $request->longitud,
+            'activo' => $request->has('activo'),
+        ]);
 
         return redirect()->route('tiendas.index')
-            ->with('success', 'Tienda actualizada exitosamente.');
+            ->with('success', 'Tienda actualizada exitosamente');
     }
 
     /**
      * Eliminar tienda
      */
-    public function destroy($id)
+    public function destroy(Tienda $tienda)
     {
-        $tienda = Tienda::findOrFail($id);
-        
-        // Verificar si tiene usuarios asignados
-        if ($tienda->users()->count() > 0) {
-            return redirect()->route('tiendas.index')
-                ->with('error', 'No se puede eliminar la tienda porque tiene usuarios asignados.');
-        }
-        
-        // Verificar si tiene inventario
+        // Verificar si tiene inventarios
         if ($tienda->inventarios()->count() > 0) {
-            return redirect()->route('tiendas.index')
-                ->with('error', 'No se puede eliminar la tienda porque tiene inventario registrado.');
+            return back()->with('error', 'No se puede eliminar la tienda porque tiene inventarios asociados');
         }
-        
-        try {
-            $tienda->delete();
-            return redirect()->route('tiendas.index')
-                ->with('success', 'Tienda eliminada exitosamente.');
-        } catch (\Exception $e) {
-            return redirect()->route('tiendas.index')
-                ->with('error', 'Error al eliminar la tienda.');
+
+        // Verificar si tiene ingresos
+        if ($tienda->ingresos()->count() > 0) {
+            return back()->with('error', 'No se puede eliminar la tienda porque tiene ingresos asociados');
         }
+
+        // Verificar si tiene facturas
+        if ($tienda->facturas()->count() > 0) {
+            return back()->with('error', 'No se puede eliminar la tienda porque tiene facturas asociadas');
+        }
+
+        $tienda->delete();
+
+        return redirect()->route('tiendas.index')
+            ->with('success', 'Tienda eliminada exitosamente');
+    }
+
+    /**
+     * Activar/Desactivar tienda
+     */
+    public function toggleActivo(Tienda $tienda)
+    {
+        $tienda->update(['activo' => !$tienda->activo]);
+
+        $mensaje = $tienda->activo ? 'Tienda activada' : 'Tienda desactivada';
+
+        return back()->with('success', $mensaje);
     }
 }
